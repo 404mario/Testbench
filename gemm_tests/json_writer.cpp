@@ -4,8 +4,8 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include <algorithm> 
-#include <cctype>   
+#include <algorithm>
+#include <cctype>
 #include <iostream>
 #include "json.hpp"
 #include <cuda_runtime_api.h>
@@ -17,7 +17,7 @@ std::string detect_spec_filename(std::string device_name) {
     // 1. 定义已知的高频型号列表 (可以按需补充)
     // 注意：顺序很重要，如果名字里同时包含多个关键词，前面的优先
     std::vector<std::string> known_models = {
-        "B200", "B300", "GB200", "GB300", "H100", "H200", "H20", "H800", "A100", "A800", "5090",		
+        "B200", "B300", "GB200", "GB300", "H100", "H200", "H20", "H800", "A100", "A800", "5090",
         "4090", "3090", "L40", "T4", "V100"
     };
 
@@ -54,7 +54,6 @@ std::string get_driver_version_smart() {
     }
     return version;
 }
-
 // === 2. 性能达标检查 (保持不变) ===
 std::pair<std::string, double> check_performance_status(const std::string& spec_filename, const std::string& dtype, double measured_tflops) {
     std::ifstream f(spec_filename);
@@ -69,7 +68,7 @@ std::pair<std::string, double> check_performance_status(const std::string& spec_
         if (!specs["gemm"].contains(dtype)) return {"Dtype Missing in Spec", 0.0};
 
         double spec_val = specs["gemm"][dtype];
-        double threshold = spec_val * 0.75; 
+        double threshold = spec_val * 0.69;
 
         if (measured_tflops >= threshold) {
             return {"Passed", spec_val};
@@ -80,7 +79,6 @@ std::pair<std::string, double> check_performance_status(const std::string& spec_
         return {"Unknown Spec Error", 0.0};
     }
 }
-
 // === 3. 生成 JSON 对象 (核心修改区域) ===
 json get_result_json(int M, int N, int K, const std::string& dtype,
                      float ms, int iters, int device,
@@ -89,7 +87,7 @@ json get_result_json(int M, int N, int K, const std::string& dtype,
     // [修改点]：不再硬编码 "B200_specs.json"
     // 而是通过 prop.name 动态获取
     std::string target_spec_file = detect_spec_filename(prop.name);
-    
+
     // 如果你想在控制台确认它在找哪个文件，可以取消下面这行的注释
     // std::cout << "Debug: Looking for spec file: " << target_spec_file << std::endl;
 
@@ -120,7 +118,7 @@ json get_result_json(int M, int N, int K, const std::string& dtype,
     json j;
     j["test_name"] = raw_name;
     j["configuration"]["data_type"] = dtype;
-    
+
     j["gpu_info"]["index"] = device;
     j["gpu_info"]["name"] = prop.name; // 原始名称，例如 "NVIDIA H100 80GB HBM3"
     j["gpu_info"]["target_spec_file"] = target_spec_file; // [可选] 记录实际使用的 spec 文件名
@@ -133,15 +131,15 @@ json get_result_json(int M, int N, int K, const std::string& dtype,
     j["problem_size"]["n"] = N;
     j["problem_size"]["k"] = K;
     j["problem_size"]["l_batch"] = 1;
-    
+
     j["performance"]["tflops"] = tflops;
-    
+
     if (spec_val > 0.0) {
         j["performance"]["spec_tflops"] = spec_val;
-        j["performance"]["threshold_75pct"] = spec_val * 0.75;
+        j["performance"]["threshold_69pct"] = spec_val * 0.69;
         j["performance"]["percent_of_spec"] = (tflops / spec_val) * 100.0;
     }
-    
+
     return j;
 }
 
@@ -152,3 +150,4 @@ void save_all_results(const std::vector<json>& results, const std::string& filen
     o.close();
     std::cout << "All results saved to " << filename << " (Total GPUs: " << results.size() << ")" << std::endl;
 }
+

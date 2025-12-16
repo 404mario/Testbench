@@ -101,7 +101,6 @@ json run_cublasLt_benchmark(int M, int N, int K, std::string dtype, int iters, i
     } else {
         fprintf(stderr, "Unknown cublasLt dtype: %s\n", dtype.c_str()); exit(1);
     }
-
     CHECK_CUDA(cudaMemset(dC, 0, sizeC));
 
     void *d_a_scale = nullptr, *d_b_scale = nullptr;
@@ -120,6 +119,11 @@ json run_cublasLt_benchmark(int M, int N, int K, std::string dtype, int iters, i
     cublasLtMatmulDesc_t matmulDesc;
     CHECK_CUBLAS(cublasLtMatmulDescCreate(&matmulDesc, computeType, scaleType));
 
+    if (dtype.find("fp8") != std::string::npos || dtype == "int8") {  // <--- 加上 || dtype == "int8"
+        cublasOperation_t opT = CUBLAS_OP_T;
+        CHECK_CUBLAS(cublasLtMatmulDescSetAttribute(matmulDesc, CUBLASLT_MATMUL_DESC_TRANSA, &opT, sizeof(opT)));
+    }
+
     if (d_a_scale) {
         CHECK_CUBLAS(cublasLtMatmulDescSetAttribute(matmulDesc, CUBLASLT_MATMUL_DESC_A_SCALE_POINTER, &d_a_scale, sizeof(d_a_scale)));
         CHECK_CUBLAS(cublasLtMatmulDescSetAttribute(matmulDesc, CUBLASLT_MATMUL_DESC_B_SCALE_POINTER, &d_b_scale, sizeof(d_b_scale)));
@@ -132,10 +136,12 @@ json run_cublasLt_benchmark(int M, int N, int K, std::string dtype, int iters, i
     CHECK_CUBLAS(cublasLtMatmulPreferenceCreate(&preference));
     CHECK_CUBLAS(cublasLtMatmulPreferenceSetAttribute(preference, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &workspaceSize, sizeof(workspaceSize)));
 
+    // -----------------------------------------------------------
+    // 原始代码：只请求 1 个算法，且只用第 0 个
+    // -----------------------------------------------------------
     cublasLtMatmulHeuristicResult_t heuristicResult = {};
     int returnedResults = 0;
     CHECK_CUBLAS(cublasLtMatmulAlgoGetHeuristic(handle, matmulDesc, layoutA, layoutB, layoutC, layoutC, preference, 1, &heuristicResult, &returnedResults));
-
 
     if (returnedResults == 0) {
         fprintf(stderr, "Error: No valid cuBLASLt algorithm found for %s. Check GPU Arch.\n", dtype.c_str());
@@ -180,7 +186,7 @@ json run_cublasLt_benchmark(int M, int N, int K, std::string dtype, int iters, i
     double tflops = (flops / 1e12) / (ms / iters / 1e3);
 
     printf("  [Device %d] Avg time: %.3f ms, Perf: %.2f TFLOPS/TOPS (dtype=%s)\n", device, ms/iters, tflops, dtype.c_str());
-    
+
     // 返回 JSON 对象而不是写文件
     json result = get_result_json(M, N, K, dtype, ms, iters, device, prop, tflops);
 
@@ -237,7 +243,6 @@ json run_legacy_benchmark(int M, int N, int K, std::string dtype, int iters, int
     } else {
         fprintf(stderr,"Unknown dtype %s\n",dtype.c_str()); exit(1);
     }
-
     CHECK_CUDA(cudaDeviceSynchronize());
     for(int i=0;i<10;i++) CHECK_CUBLAS(cublasGemmEx(handle,CUBLAS_OP_N,CUBLAS_OP_N,M,N,K,&alpha,dA,Atype,lda,dB,Btype,ldb,&beta,dC,Ctype,ldc,ComputeType,CUBLAS_GEMM_DEFAULT_TENSOR_OP));
 
@@ -251,7 +256,7 @@ json run_legacy_benchmark(int M, int N, int K, std::string dtype, int iters, int
     double flops=2.0*(double)M*(double)N*(double)K;
     double tflops=(flops/1e12)/(ms/iters/1e3);
     printf("  [Device %d] Avg time: %.3f ms, Perf: %.2f TFLOPS (dtype=%s)\n", device, ms/iters, tflops, dtype.c_str());
-    
+
     // 返回 JSON
     json result = get_result_json(M, N, K, dtype, ms, (int)iters, device, prop, tflops);
 
@@ -290,7 +295,6 @@ void parse_args(int argc, char** argv, int& M, int& N, int& K, std::string& dtyp
         }
     }
 }
-
 // ==========================================
 // 5. Main 函数 (支持多卡遍历)
 // ==========================================
@@ -324,7 +328,7 @@ int main(int argc, char** argv) {
 
       printf("----------------------------------------------------------------\n");
       printf("Benchmarking Device %d: %s (SMs=%d, CC=%d.%d)\n", i, prop.name, prop.multiProcessorCount, prop.major, prop.minor);
-      
+
       json res;
       // 根据 dtype 选择测试函数
       if (dtype == "fp8_e4m3" || dtype == "fp8_e5m2" || dtype == "int8") {
@@ -332,13 +336,13 @@ int main(int argc, char** argv) {
       } else {
           res = run_legacy_benchmark(M, N, K, dtype, iters, i, prop);
       }
-      
+
       // 收集结果
       all_results.push_back(res);
   }
 
   printf("----------------------------------------------------------------\n");
-  
+
   // 4. 将所有结果一次性写入文件
   save_all_results(all_results, "gemm_result.json");
 
