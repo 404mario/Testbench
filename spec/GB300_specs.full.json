@@ -1,0 +1,57 @@
+{
+  "gpu_name": "GB300",
+  "aliases": ["GB300", "B300", "NVIDIA GB300", "NVIDIA B300"],
+  "architecture": "Blackwell Ultra",
+  "memory": {
+    "type": "HBM3e",
+    "capacity_GB": 288,
+    "bandwidth_GBps": 8000
+  },
+  "interconnect": {
+    "nvlink_bandwidth_GBps": 1800,
+    "pcie": "PCIe 6.0 x16"
+  },
+  "compute_peak_tflops": {
+    "fp64": 1.3,
+    "fp32": 80,
+    "fp64_tc": 1.3,
+    "tf32_tc": {
+      "dense": 1280,
+      "sparse_or_boost": 2560
+    },
+    "bf16_tc": {
+      "dense": 2560,
+      "sparse_or_boost": 5120
+    },
+    "fp16_tc": {
+      "dense": 2560,
+      "sparse_or_boost": 5120
+    },
+    "fp8_tc": {
+      "dense": 5120,
+      "sparse_or_boost": 10240
+    },
+    "fp4_tc": {
+      "dense": 15360,
+      "sparse_or_boost": 20480
+    },
+    "int8_tc": {
+      "dense": 160,
+      "sparse_or_boost": 320,
+      "note": "Value copied from provided table, but suspiciously low; do not use as strict pass threshold before verification."
+    }
+  },
+  "power": {
+    "tdp_W": 1400
+  },
+  "test_policy": {
+    "stage": "initial_bringup",
+    "strict_pass": false,
+    "notes": [
+      "Use this spec first as metadata and theoretical reference.",
+      "Do not use sparse_or_boost numbers as default pass thresholds.",
+      "For first GB300 bring-up, validate binary architecture, CUDA initialization, and result JSON generation before enforcing performance thresholds.",
+      "Lock clock values are not filled because they must be queried from the real machine."
+    ]
+  }
+}

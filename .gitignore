@@ -1,0 +1,43 @@
+# ===== Build artifacts =====
+nccl_tests/build/
+nvbandwidth_tests/CMakeCache.txt
+nvbandwidth_tests/CMakeFiles/
+nvbandwidth_tests/cmake_install.cmake
+nvbandwidth_tests/Makefile.in
+nvbandwidth_tests/nvbandwidth
+*.o
+*.obj
+
+# ===== Compiled tool binaries (never commit - too big, platform-specific) =====
+/bench_gemm
+/stream
+/nvbandwidth
+/all_reduce_perf
+/alltoall_perf
+gemm_tests/bench_gemm
+gemm_tests/merge2
+stream_tests/stream
+stream_tests/stream_benchmark
+
+# ===== Test outputs =====
+result/
+*_result.json
+*.log
+nvbandwidth_tests/nvbandwidth_result.json
+gemm_tests/gemm_result.json
+stream_tests/stream_result.json
+
+# ===== Diagnostic snapshots (collected by scripts/collect_fabric_evidence.sh) =====
+diagnostics/
+collected_*/
+fabric_evidence_*/
+
+# ===== Editor / OS noise =====
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===== Local scratch =====
+tmp/
+.cache/
