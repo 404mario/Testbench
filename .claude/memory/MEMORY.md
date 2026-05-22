@@ -1,0 +1,8 @@
+- [User: GB300/NVL72 bring-up operator](user_role.md) — 在 GB300 NVL72 compute node 上做 Testbench bring-up；中文沟通；偏好"先方案后执行"
+- [Project: 404mario/Testbench GB300 bring-up status](project_gb300_bringup.md) — fabric 仍 In Progress；2026-05-22 完成上游+NGC 容器两段隔离验证，确认 100% chassis 侧问题
+- [Reference: 192.168.15.171 = NVOS NMX-C switch](ref_nvos_switch.md) — chassis NVSwitch 控制器，CUDA 解锁的唯一入口
+- [Reference: peer compute node SSH 互信状态](ref_peer_node_ssh.md) — 18 compute node 之间 root 无互信；authorized_keys 来源 bu18 jump hosts
+- [Reference: Testbench 工具构建参数](ref_build_aarch64.md) — 各工具在 GB300+CUDA13 下的精确构建命令
+- [Feedback: 操作边界](feedback_operational_boundaries.md) — 用户禁止的硬约束（reboot/重启服务/改 /etc 等）
+- [Feedback: 沟通节奏与确认习惯](feedback_communication.md) — 改动前先给方案；分批 review 草稿；用户用 ! 前缀执行本地命令
+- [Feedback: Mentor 的隔离 debug 顺序](feedback_mentor_debug_pattern.md) — vanilla 上游 → NGC 容器 → 上升运维；要完整证据链而非最少必要信息
