@@ -1,0 +1,26 @@
+# MPI hostfile for NVL72 — 18 compute nodes × 4 GPU each = 72 ranks total.
+#
+# Each line:  <hostname-or-IP>  slots=<gpus-per-node>
+#
+# Copy this file to ./hostfile.nvl72 and edit the IPs for your deployment.
+# The runner_cluster.sh + setup.sh scripts both look for ./hostfile.nvl72
+# in the same directory.
+
+192.168.15.137 slots=4
+192.168.15.138 slots=4
+192.168.15.139 slots=4
+192.168.15.140 slots=4
+192.168.15.141 slots=4
+192.168.15.142 slots=4
+192.168.15.143 slots=4
+192.168.15.144 slots=4
+192.168.15.145 slots=4
+192.168.15.146 slots=4
+192.168.15.147 slots=4
+192.168.15.148 slots=4
+192.168.15.149 slots=4
+192.168.15.150 slots=4
+192.168.15.151 slots=4
+192.168.15.152 slots=4
+192.168.15.153 slots=4
+192.168.15.154 slots=4

@@ -10,11 +10,15 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 - **NCCL**: 2.29.7 (`/lib/aarch64-linux-gnu/`), **cuBLAS**: 13.4 (`/usr/local/cuda/targets/sbsa-linux/lib/`)
 - 本地工作节点示例：`pega` / `192.168.15.153`；IMEX 集群 `192.168.15.137`–`192.168.15.154`
 
-## 当前关键状态（2026-05-21）
+## 当前关键状态（2026-05-27 — 更新）
 
-❌ **CUDA runtime 在本节点 block 中**：`fabric.state = In Progress`，`cudaGetDeviceCount` 无限 hang。详见 [`docs/runbooks/gb300-fabric-bringup-blocker.md`](docs/runbooks/gb300-fabric-bringup-blocker.md) 与 [`docs/runbooks/gb300-fabric-escalation.md`](docs/runbooks/gb300-fabric-escalation.md)。
+✅ **Fabric UP**：自 2026-05-27 起 fabric 全栈通；ClusterUUID `2d5e61c9-2f89-47e8-a163-14eee25d0f15`，CliqueId 32766。详见 [`.claude/memory/project_gb300_bringup.md`](.claude/memory/project_gb300_bringup.md)（root cause 在 switch 侧 NMX-C，A-model 一开关跑全栈）。
 
-→ 这是 **chassis 侧 / NVSwitch OS 侧 SDN partition 未下发** 导致的，不是本节点能解决的。Compile-only 流程（重编 aarch64 二进制 + 入库 + 推送）不受影响。
+✅ **18 节点 SSH 互信** ：共享单一 ed25519 keypair，any-to-any 免密。见 [`.claude/memory/project_nvl72_ssh.md`](.claude/memory/project_nvl72_ssh.md)。
+
+✅ **72 GPU NCCL 验证通过**：7 种 collective 全跑过，all_reduce peak 747.54 GB/s @ 1 GiB。完整数据见 [`docs/reports/2026-05-27-nvl72-baseline.md`](docs/reports/2026-05-27-nvl72-baseline.md)。
+
+> 2026-05-21 之前的旧状态（fabric blocked, CUDA hang）记录归入 `docs/runbooks/gb300-fabric-{bringup-blocker,escalation}.md` 作为历史。当前不再阻塞。
 
 ## 仓库 ↔ ~/bench 分工
 
@@ -22,7 +26,8 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 |------|------|---------|
 | 工具源码 | `gemm_tests/`、`stream_tests/`、`nccl_tests/`、`nvbandwidth_tests/` | ✅ |
 | 运行脚本权威源 | `scripts/run_parallel_test.sh` | ✅ |
-| 自动化脚本 | `scripts/diagnose_gb300_env.sh`、`collect_fabric_evidence.sh`、`build_aarch64_tools.sh`、`daily_snapshot.sh` | ✅ |
+| 自动化脚本 | `scripts/diagnose_gb300_env.sh`、`collect_fabric_evidence.sh`、`build_aarch64_tools.sh`、`build_nccl_tests_mpi.sh`、`daily_snapshot.sh` | ✅ |
+| 72-GPU runner | `scripts/runner_cluster.sh`、`scripts/env.sh`、`scripts/setup.sh`、`scripts/fix_imex_channels.sh`、`scripts/hostfile.nvl72.example` | ✅ |
 | Spec（运行时契约 + 元数据） | `spec/GB300_specs.json`（扁平契约）、`spec/GB300_specs.full.json`（嵌套元数据） | ✅ |
 | Runbook / 协作约定 | `CLAUDE.md`、`docs/runbooks/`、`.claude/skills/` | ✅ |
 | **部署/运行工作区** | `~/bench/` (二进制 + spec + result + 部署版脚本) | ❌ 永不入 git |
@@ -34,7 +39,8 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 
 1. **不要 reboot**
 2. **不要重启** `nvidia-imex` / `nvidia-fabricmanager` / `sshd` / `nvidia-persistenced`（`/run/nvidia-imex/persist.dat` 是集群协商状态）
-3. **不要修改** `/etc/nvidia-imex/`（特别是 `nodes_config.cfg` 必须保持 18 节点，参考 IP `192.168.15.137`–`192.168.15.154`）
+3. **不要 stop fabric** (`nv set cluster state disabled`) 哪怕只是过夜——见 `.claude/memory/project_gb300_bringup.md` 的 "Operational rule"
+4. **不要修改** `/etc/nvidia-imex/`（特别是 `nodes_config.cfg` 必须保持 18 节点，参考 IP `192.168.15.137`–`192.168.15.154`）
 4. **不要修改** `/etc/ssh/`；**不要在跳板机上配置免密**；只在 compute 节点之间互信
 5. **不要修改** `/etc/modprobe.d/nvidia.conf`（驱动加载参数）
 6. **不要 sudo apt install / apt purge** 任何包，除非用户明确同意
@@ -48,9 +54,15 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 |---------|------|
 | 只读环境诊断 | `bash scripts/diagnose_gb300_env.sh` |
 | 收集 fabric 证据包（给运维） | `bash scripts/collect_fabric_evidence.sh` |
-| 编译 4 个工具 aarch64 版本 | `bash scripts/build_aarch64_tools.sh` |
+| 编译 4 个单节点工具 aarch64 版 | `bash scripts/build_aarch64_tools.sh` |
+| 编译 nccl-tests MPI=1 版（多节点用） | `bash scripts/build_nccl_tests_mpi.sh` |
 | 当天结束 commit + push | `bash scripts/daily_snapshot.sh` |
-| 本地烟测（**需 fabric 修好后**） | `cd ~/bench && ./run_parallel_test.sh stream 127.0.0.1` |
+| 单节点烟测 | `cd ~/bench && ./run_parallel_test.sh stream localhost` |
+| 全 NVL72 18 节点独立烟测 | `cd ~/bench && ./run_parallel_test.sh nvbandwidth all` |
+| **72 GPU NCCL collective** | `cd /root/bench-bundle && ./scripts/run_parallel_test.sh --mode=72gpu all_reduce` |
+| OSS 新机器一键恢复 | 见 [`docs/runbooks/oss-restore.md`](docs/runbooks/oss-restore.md) |
+| 完整 5-tier 烟测 workflow | 见 [`docs/runbooks/72gpu-nccl-workflow.md`](docs/runbooks/72gpu-nccl-workflow.md) |
+| 为什么 NCCL 需要 MPI / MNNVL 原理 | 见 [`docs/runbooks/nccl_design.md`](docs/runbooks/nccl_design.md) |
 
 ## 已知问题快速索引
 
@@ -58,9 +70,13 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 
 - `ConnectFail` 真正含义（不是 ssh 连接失败，是结果 JSON 没产出）
 - x86_64 ELF 在 aarch64 上的 `Exec format error`
-- `fabric.state = In Progress` + `cudaGetDeviceCount` hang
+- `fabric.state = In Progress` + `cudaGetDeviceCount` hang（历史，2026-05-27 已修复）
 - NVL72 compute node **不能本机跑 FabricManager**（NVSwitch 在 chassis）
 - spec schema 契约（4 个二进制都按扁平 schema 读）
+- **NCCL MNNVL 报 Cuda 800** —— IMEX channel0 dev 文件 17/18 节点缺失，跑 `scripts/fix_imex_channels.sh` 修
+- **OpenMPI + UCX 走 IB 超时** —— `scripts/env.sh` 固定 `UCX_TLS=tcp,self,sm`
+- **nvbandwidth 报 B300_specs.json not found** —— 装饰性 warning，harness 层判定准确
+- **18 节点 hostname 全是 pega** —— 共享镜像漏改，靠 IP 区分
 
 ## 上游 README（Testbench 工具）
 

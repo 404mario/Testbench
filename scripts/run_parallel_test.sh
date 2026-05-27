@@ -1,10 +1,20 @@
 #!/bin/bash
 
 # ================= 脚本功能说明 =================
-# Run Parallel Test v8
-# 功能：并行测试 + 自动重试 + 动态 Specs 配置
-# 变更：Specs 文件源路径修改为 spec/ 文件夹
+# Run Parallel Test v9
+# v8 + --mode=72gpu dispatch to runner_cluster.sh (tightly-coupled MPI mode)
+# 默认行为(unchanged): 在每个节点上独立跑同一个测试，最后汇总
+# --mode=72gpu / --mode=cluster: 从本机出发 mpirun 协调全部 GPU 跑一个 collective
 # ===================================================
+
+# ---- early dispatch: --mode={72gpu,cluster} routes to runner_cluster.sh ----
+case "${1:-}" in
+    --mode=72gpu|--mode=cluster)
+        shift
+        exec "$(dirname "$0")/runner_cluster.sh" "$@"
+        ;;
+esac
+# ---- end dispatch ----
 
 # 0. 初始化记录文件
 FAIL_RECORD_FILE=$(mktemp) # 记录最终失败
