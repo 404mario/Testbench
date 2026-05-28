@@ -1,8 +1,10 @@
 # ===== Build artifacts =====
 nccl_tests/build/
+nccl_tests/build_no_mpi/
 nvbandwidth_tests/CMakeCache.txt
 nvbandwidth_tests/CMakeFiles/
 nvbandwidth_tests/cmake_install.cmake
+nvbandwidth_tests/Makefile
 nvbandwidth_tests/Makefile.in
 nvbandwidth_tests/nvbandwidth
 *.o
