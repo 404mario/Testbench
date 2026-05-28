@@ -2,6 +2,8 @@
   "gpu_name": "GB300",
   "aliases": ["GB300", "B300", "NVIDIA GB300", "NVIDIA B300"],
   "architecture": "Blackwell Ultra",
+  "_updated": "2026-05-28",
+  "_source": "Spec table provided by mentor 2026-05-28. Theoretical peak datasheet values. For runtime acceptance thresholds, see GB300_specs.json (and B300_specs.json which binaries currently read).",
   "memory": {
     "type": "HBM3e",
     "capacity_GB": 288,
@@ -11,9 +13,15 @@
     "nvlink_bandwidth_GBps": 1800,
     "pcie": "PCIe 6.0 x16"
   },
+  "cores": {
+    "cuda_cores": null,
+    "tensor_cores": null
+  },
   "compute_peak_tflops": {
     "fp64": 1.3,
     "fp32": 80,
+    "fp16": null,
+    "bf16": null,
     "fp64_tc": 1.3,
     "tf32_tc": {
       "dense": 1280,
@@ -31,14 +39,14 @@
       "dense": 5120,
       "sparse_or_boost": 10240
     },
-    "fp4_tc": {
-      "dense": 15360,
-      "sparse_or_boost": 20480
-    },
     "int8_tc": {
       "dense": 160,
       "sparse_or_boost": 320,
       "note": "Value copied from provided table, but suspiciously low; do not use as strict pass threshold before verification."
+    },
+    "fp4_tc": {
+      "dense": 15360,
+      "sparse_or_boost": 20480
     }
   },
   "power": {
@@ -48,10 +56,11 @@
     "stage": "initial_bringup",
     "strict_pass": false,
     "notes": [
-      "Use this spec first as metadata and theoretical reference.",
+      "This file is the metadata / theoretical truth source for GB300.",
+      "Runtime pass thresholds live in GB300_specs.json (flat schema, read by binaries when GPU name matches GB300).",
+      "Note: current binaries map 'NVIDIA GB300' to B300_specs.json via detect_spec_filename(); both files should be kept in sync until binaries are rebuilt.",
       "Do not use sparse_or_boost numbers as default pass thresholds.",
-      "For first GB300 bring-up, validate binary architecture, CUDA initialization, and result JSON generation before enforcing performance thresholds.",
-      "Lock clock values are not filled because they must be queried from the real machine."
+      "Lock clock values are queried from the real machine at runtime, not stored here."
     ]
   }
 }

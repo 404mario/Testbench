@@ -8,13 +8,13 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 - **单节点**：4× NVIDIA GB300 (Blackwell Ultra, sm_100, 288 GiB HBM3e)，NVIDIA Grace (aarch64) CPU, Ubuntu 24.04
 - **CUDA**: 13.2 (`/usr/local/cuda-13`), **driver**: `nvidia-dkms-open 595.58.03`（**open** kernel module 分支）
 - **NCCL**: 2.29.7 (`/lib/aarch64-linux-gnu/`), **cuBLAS**: 13.4 (`/usr/local/cuda/targets/sbsa-linux/lib/`)
-- 本地工作节点示例：`pega` / `192.168.15.153`；IMEX 集群 `192.168.15.137`–`192.168.15.154`
+- 本地工作节点示例：`192.168.15.137`（hostname `pega`；注意 18 节点都叫 `pega`，用 IP 区分）；IMEX 集群 `192.168.15.137`–`192.168.15.154`
 
-## 当前关键状态（2026-05-21）
+## 当前关键状态（2026-05-28）
 
-❌ **CUDA runtime 在本节点 block 中**：`fabric.state = In Progress`，`cudaGetDeviceCount` 无限 hang。详见 [`docs/runbooks/gb300-fabric-bringup-blocker.md`](docs/runbooks/gb300-fabric-bringup-blocker.md) 与 [`docs/runbooks/gb300-fabric-escalation.md`](docs/runbooks/gb300-fabric-escalation.md)。
+✅ **Bring-up 完成**：72 GPU 全部在 clique 32766；72-GPU 全量测试通过。当日报告 [`docs/reports/2026-05-28-72gpu-full.md`](docs/reports/2026-05-28-72gpu-full.md)。
 
-→ 这是 **chassis 侧 / NVSwitch OS 侧 SDN partition 未下发** 导致的，不是本节点能解决的。Compile-only 流程（重编 aarch64 二进制 + 入库 + 推送）不受影响。
+⚠️ **新风险点**：driver 内 NVLink topology cache 会被 chassis 端 bandwidth 查询不一致触发的 assertion 冻在降级状态（NCCL busbw 可能从 600+ 跌到 48 GB/s）。修复 SOP 见 [`docs/runbooks/driver-topology-cache-fix.md`](docs/runbooks/driver-topology-cache-fix.md) — driver reload + 单 GPU FLR，未 reboot 未动 chassis 即可恢复。长期需 chassis 端修复 bandwidth 查询不一致。
 
 ## 仓库 ↔ ~/bench 分工
 
@@ -50,7 +50,10 @@ GPU 集群性能测试工具源码 + 运行脚本。当前任务：在 GB300 / N
 | 收集 fabric 证据包（给运维） | `bash scripts/collect_fabric_evidence.sh` |
 | 编译 4 个工具 aarch64 版本 | `bash scripts/build_aarch64_tools.sh` |
 | 当天结束 commit + push | `bash scripts/daily_snapshot.sh` |
-| 本地烟测（**需 fabric 修好后**） | `cd ~/bench && ./run_parallel_test.sh stream 127.0.0.1` |
+| 18 节点 fabric 健康检查 | `bash ~/bench-bundle/scripts/health_check_peers.sh` |
+| **72-GPU 全量烟测**（per-node + cluster + 报告） | `bash ~/bench-bundle/scripts/run_72gpu_full.sh` |
+| 单节点本地 4-GPU 烟测 | `cd ~/bench-bundle/bin/single-node && ./all_reduce_perf -b 1G -e 8G -f 2 -g 4` |
+| NCCL busbw 突然垮（中毒恢复） | 见 `docs/runbooks/driver-topology-cache-fix.md` |
 
 ## 已知问题快速索引
 
