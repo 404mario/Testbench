@@ -1,45 +1,41 @@
 ---
 name: project-gb300-bringup
-description: 当前 GB300 NVL72 bring-up 阻塞点（fabric/CUDA）、已完成的工作（aarch64 二进制 + 仓库脚手架 + 上游/容器隔离验证）、下一步等待项。
+description: GB300 NVL72 bring-up 当前状态（2026-05-28）：fabric 已 unblock，72-GPU 全量测试完成；新风险点是 driver NVLink topology cache 中毒。
 metadata: 
   node_type: memory
   type: project
-  originSessionId: 3b508727-f532-4710-94b8-488cbd33ed4d
 ---
 
-**事实**：本节点（hostname `pega`，`192.168.15.153`，18 节点 NVL72 之一）**CUDA runtime 不可用**。`fabric.state = In Progress`，`CliqueId/ClusterUUID/Partition Assigned` 全 N/A。
+**当前状态（2026-05-28）：bring-up 完成**
 
-**Why:** GB300 NVL72 Kyber 架构里 NVSwitch 在 chassis（不在 compute node），所有 NVLink 流量（含同节点 GPU0↔GPU1）都走外置 NVSwitch。driver gate `cudaInit` 在 chassis 侧 SDN partition assignment。chassis 不下发 partition 时，**单卡都启动不了**——这是 NVL72 的硬性架构约束（不像 DGX H100 还能丢 NVLink 凑合单卡）。
+本节点（`192.168.15.137`，18 节点 NVL72 之一）4 GPU 全部加入 clique 32766，72-GPU 全量测试通过。
 
-**API 行为分歧（2026-05-22 修正）**：同一个 fabric blocker 在不同 CUDA API 下表现不同：
-- **driver API** `cuInit(0)` → **fast-fail，返 `CUDA_ERROR_SYSTEM_NOT_READY` (errno 802)**
-- **runtime API** `cudaGetDeviceCount` / `cudaSetDevice` → **无限 hang**（runtime 内部等 driver ready）
-- 实现影响：我们自己的 4 工具（bench_gemm / stream 等）应在 main 顶部加 `cuInit()` early-probe，把 hang 改成 fast-fail；上游 nvbandwidth 已经是这种行为
+**注意 hostname 误导**：所有 18 节点 hostname 都叫 `pega`（共享 hostname 配置），用 IP 区分。原 CLAUDE.md 把本节点写成 `.153`，实测是 `.137`。
+
+**今天完成的工作（2026-05-28）**：
+
+1. **Spec 更新**：`spec/GB300_specs.full.json` 写入完整 datasheet 元数据（架构/HBM3e/NVLink/PCIe6.0/全 dtype TFLOPS dense+sparse/TDP 1400W）；`GB300_specs.json` 加注释说明 binary 选 spec 的 bug
+2. **Driver topology cache 修复**：成功用 driver reload + GPU 2 FLR 把 NCCL all_reduce 4-GPU busbw 从降级 48 GB/s 恢复到 687 GB/s，未 reboot 未动 chassis。详见 `docs/runbooks/driver-topology-cache-fix.md`
+3. **72-GPU 全量测试**：18 节点 × per-node (gemm 6 dtype + stream + nvbandwidth 含 PCIe) + 72-rank MPI 7 个 NCCL collective 全过。报告 `docs/reports/2026-05-28-72gpu-full.md`
+4. **新机器 bring-up SOP**：`docs/runbooks/new-machine-bringup.md` + `README.md` + 一键脚本 `scripts/run_72gpu_full.sh` / `scripts/health_check_peers.sh` / `scripts/aggregate_72gpu.py`
+
+**关键性能数据（2026-05-28，72 GPU 跨 18 节点）**：
+
+- GEMM: fp64 1.10 TFLOPS (85% peak)、fp8_e4m3 4342 TFLOPS (85% peak)，72-GPU stddev < 1%
+- STREAM: Copy/Scale ~6983 GB/s、Add/Triad ~7097 GB/s (87-89% of HBM3e 8000 peak)
+- nvbandwidth dev↔dev bidir read 1527 GB/s (85% of 1800 NVLink peak)
+- nvbandwidth Grace-C2C host↔device 211 GB/s 单向（注意是 C2C 不是 PCIe）
+- 72-rank NCCL all_reduce 8 GiB peak busbw **881 GB/s**（其他 6 个 collective 655-712），0 wrong
+
+**已知遗留问题**：
+
+1. **Binary spec 选错**：`bench_gemm`/`stream`/`nvbandwidth`/`all_reduce_perf` 把 GPU name `NVIDIA GB300` 硬编码映射到 `B300_specs.json` 不是 GB300。修需重编 `detect_spec_filename()`
+2. **Driver state 脆弱性**：driver 内 NVLink 拓扑缓存会被 chassis 端一次 bandwidth 查询不一致触发的 assertion 冻在降级状态。运行高负载 NCCL 会再次触发。**长期需要 chassis 端解决 bandwidth 查询不一致**，否则只能反复 driver reload+FLR
+3. **NCCL busbw 距 NVLink peak 还有空间**：8 GiB all_reduce 881 GB/s vs NVLink physical 1800 GB/s 双向 ~49%。如要进一步压榨可调 `NCCL_ALGO=NVLS` / `NCCL_PROTO=Simple` / `NCCL_NCHANNELS_PER_PEER`
+
+**Why:** 5/22 之前 fabric 一直 In Progress (chassis 侧 SDN partition 未下发)；后续 chassis 端解决了。5/27 跑出 baseline。5/28 跑首次高负载触发了上述 driver state 中毒，今天用 driver reload + FLR 恢复并完成全量测试。
 
 **How to apply:**
-- 任何"绕过 fabric 做本地测试"的提议都不可行：127.0.0.1 模式不行（cudaInit 仍 802/hang），跨节点 master/worker 不行（18 节点共享 chassis fabric，预计全 stuck）
-- 解锁的**唯一**路径：进 NVOS switch `192.168.15.171` 跑 `nv action create sdn partition ...`（见 [[ref-nvos-switch]]）；要么自己有凭据，要么走运维
-- 同时编译/部署/文档/skill **全部不依赖 fabric**，可以推进到 fabric 修好
-
-**已完成（2026-05-21）**：
-- `nvidia-fabricmanager 595.58.03-1ubuntu1` 装了（精确匹配 driver），service `disabled`，包**保留**给运维改 config 后用
-- FM 启动验证：`NV_WARN_NOTHING_TO_DO`（本机无 NVSwitch 设备），符合 NVL72 设计；不再尝试本节点 FM
-- 4 工具 aarch64 重编完成并部署到 `~/bench/`（`stream`/`bench_gemm`/`nvbandwidth`/`nccl_tests/*_perf`）
-- 仓库脚手架入库：CLAUDE.md / .gitignore / 4 runbook / 4 script / 4 skill / 2 spec / vendored run_parallel_test.sh
-
-**新增（2026-05-22）—— mentor 主导的两段隔离实验**（详见 [[feedback-mentor-debug-pattern]]）：
-- **隔离 1：上游 vanilla nvbandwidth**。`/root/nvbandwidth-upstream/` clone NVIDIA/nvbandwidth main (HEAD `4a49bda`，v0.9 merge)，native aarch64 cmake+make 一次成功。`cuInit(0)` → 802。**排除我们 Testbench fork 改坏 + 排除我们 build chain 问题**。
-- **隔离 2：NGC 官方容器**。装了 `docker.io` (29.1.3) + `nvidia-container-toolkit` (1.19.1)，配 `nvidia` runtime；pull `nvcr.io/nvidia/pytorch:26.04-py3` (arm64/linux, 35 GB on disk)。容器 entrypoint 自检脚本一启动就报 `[[ System not yet initialized (error 802) ]]`；容器内 `nvidia-smi` 正常枚举 4 卡（NVML 不依赖 fabric）；容器内跑 vanilla nvbandwidth → 同样 802。**排除 user-space 一切可能**。
-- **结论**：错误源在 kernel driver 层，唯一未排除项 = chassis 侧 NMX-C/GFM/NVLSM 没把本节点 4 卡 onboard 到 fabric。NVIDIA 自己的 NGC 容器自检逻辑等于帮我们打了认证。
-
-**架构认知修正（2026-05-22，来自 NVIDIA IMEX Guide）**：之前 runbook 措辞"等 fabricmanager 起来"不准。NVL72 上 GFM+NVLSM 打包成 **NMX-C 跑在 L1 NVSwitch tray**，**compute node 上不该跑 `nv-fabricmanager` 服务**（这就是为什么我们看到的 service inactive 是正确状态）。IMEX 不是替代 fabricmanager —— 两者职责不同（fabric 管路由 / IMEX 管 cross-node memory）。Runbook 里所有"fabric"措辞应改为"chassis NMX-C 编入 partition"，更精确也更难被运维推回来。Sources：https://docs.nvidia.com/multi-node-nvlink-systems/imex-guide/overview.html
-
-**Pending（等运维或外部条件）**：
-- NVOS 凭据 → fabric.state Completed → `cuda_probe` 应返回 4 GPU → Testbench 烟测可跑
-- 把今天的容器/上游证据整进 `docs/runbooks/gb300-fabric-escalation.md`（**用户暂缓**，等他回到节点再说）
-- commit + push 今天的工作（待用户拍板）
-
-**Docker / 容器状态**：pega 节点上 docker.io + nvidia-container-toolkit 已装且配置好；NGC PyTorch 26.04-py3 镜像 35 GB 已在 `/var/lib/docker/`，修好后可立即用同一镜像复验。`/root/nvbandwidth-upstream/` 保留作干净对照组。
-
-**bringup blocker 完整诊断文档**：`docs/runbooks/gb300-fabric-bringup-blocker.md`（已入仓库）。
-**escalation SOP**：`docs/runbooks/gb300-fabric-escalation.md`（已入仓库）。
+- 任何 NCCL busbw 突然垮（比 baseline 低 50%+）：先查 [[driver-topology-cache-fix]] 而不是怀疑硬件
+- 跑 72-GPU 测试前必须先 `bash scripts/health_check_peers.sh`；任何 peer 不健康则停下来报告而不是绕过
+- 日常烟测用 `bash scripts/run_72gpu_full.sh`（12-15 分钟，全自动化包含健康检查+per-node+cluster+aggregation）
