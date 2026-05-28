@@ -15,7 +15,7 @@ HOSTFILE="${1:-$(dirname "$0")/hostfile.nvl72}"
 [ -f "$HOSTFILE" ] || { echo "hostfile not found: $HOSTFILE" >&2; exit 1; }
 
 # Extract just the IPs (one per node)
-IPS=$(awk '{print $1}' "$HOSTFILE")
+IPS=$(awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {print $1}' "$HOSTFILE")
 
 for ip in $IPS; do
   ssh -o BatchMode=yes -o ConnectTimeout=5 root@"$ip" '

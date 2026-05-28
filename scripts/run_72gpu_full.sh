@@ -45,7 +45,7 @@ echo ""
 echo "==== [2/4] Per-node tests (gemm + stream + nvbandwidth, 18 nodes parallel) ===="
 echo "start: $(date +%H:%M:%S)"
 
-NODES=$(awk '{print $1}' "$HOSTFILE")
+NODES=$(awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {print $1}' "$HOSTFILE")
 
 REMOTE_SCRIPT='
 set -e

@@ -19,7 +19,7 @@ HOSTFILE="${HOSTFILE:-$(dirname "$0")/hostfile.nvl72}"
 if [ $# -gt 0 ]; then
   IPS="$*"
 elif [ -f "$HOSTFILE" ]; then
-  IPS=$(awk '{print $1}' "$HOSTFILE")
+  IPS=$(awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {print $1}' "$HOSTFILE")
 else
   echo "ERROR: no hostfile at $HOSTFILE and no IPs given" >&2
   exit 1

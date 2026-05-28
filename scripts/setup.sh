@@ -17,7 +17,7 @@ BUNDLE_ROOT="$(dirname "$SCRIPT_DIR")"
 HOSTFILE="$SCRIPT_DIR/hostfile.nvl72"
 
 [ -f "$HOSTFILE" ] || { echo "hostfile not found: $HOSTFILE" >&2; exit 1; }
-IPS=$(awk '{print $1}' "$HOSTFILE")
+IPS=$(awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {print $1}' "$HOSTFILE")
 
 echo "===== 1/3 verify SSH passwordless to all nodes ====="
 fail=0
