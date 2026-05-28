@@ -1,5 +1,9 @@
 # GB300 Fabric 状态卡住 —— 升级到运维的标准流程
 
+> **当前状态（2026-05-27）：fabric 全栈 UP，本 runbook 不适用。**
+> 保留作为 fabric 再次出问题时的通用 playbook。当前 fabric 实况见
+> [`.claude/memory/project_gb300_bringup.md`](../../.claude/memory/project_gb300_bringup.md)。
+>
 > 适用场景：本节点 `nvidia-smi --query-gpu=fabric.state` 持续显示 `In Progress`；CUDA 程序 `cudaGetDeviceCount` 长时间 hang 或返回 802；`CliqueId / ClusterUUID / Partition Assigned` 全 `N/A`。
 
 ## 1. 在 compute node 上先收齐证据

@@ -1,7 +1,9 @@
 - [User: GB300/NVL72 bring-up operator](user_role.md) — 在 GB300 NVL72 compute node 上做 Testbench bring-up；中文沟通；偏好"先方案后执行"
-- [Project: 404mario/Testbench GB300 bring-up status](project_gb300_bringup.md) — 2026-05-28 bring-up 完成，72-GPU 全量测试通过；新风险点 driver topology cache 中毒
+- [Project: GB300 NVL72 bring-up state](project_gb300_bringup.md) — fabric 自 2026-05-27 全 UP；2026-05-28 完成 72-GPU 全量测试；新风险点 driver topology cache 中毒
+- [Project: NVL72 SSH trust model](project_nvl72_ssh.md) — 18 节点共享一对 ed25519，any-to-any root 免密，2026-05-27 建立；hostname=pega 在所有节点上（IP 区分）；含 add-node / rotate-key / 备份位置
 - [Reference: 192.168.15.171 = NVOS NMX-C switch](ref_nvos_switch.md) — chassis NVSwitch 控制器，CUDA 解锁的唯一入口
-- [Reference: peer compute node SSH 互信状态](ref_peer_node_ssh.md) — 18 compute node 之间 root 无互信；authorized_keys 来源 bu18 jump hosts
+- [Reference: peer compute node SSH 互信状态](ref_peer_node_ssh.md) — 2026-05-27 已打通，共享 ed25519；细节见 project-nvl72-ssh
+- [Reference: GB300 deployment SOP cheatsheet](ref_gb300_deployment_sop.md) — 只读诊断命令集 + destructive ops 黑名单（来自 Feishu 1_gb200-poc-readme）
 - [Reference: Testbench 工具构建参数](ref_build_aarch64.md) — 各工具在 GB300+CUDA13 下的精确构建命令
 - [Feedback: 操作边界](feedback_operational_boundaries.md) — 用户禁止的硬约束（reboot/重启服务/改 /etc 等）
 - [Feedback: 沟通节奏与确认习惯](feedback_communication.md) — 改动前先给方案；分批 review 草稿；用户用 ! 前缀执行本地命令

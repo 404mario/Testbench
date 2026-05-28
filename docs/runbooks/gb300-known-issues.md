@@ -126,3 +126,64 @@ specs["nvbandwidth"]["device_to_device_..."]   // nvbandwidth
 **原因**：当前 `GB300_specs.json` 没有 `lock_clock` 字段（待 mentor / 运维给权威值）。
 
 **修复**：暂留空，影响有限——`bench_gemm` 一次性失败即记录，不重试。若要补，加 `"lock_clock": <MHz>` 到 `spec/GB300_specs.json`。
+
+---
+
+## ⑪ NCCL MNNVL 报 `Cuda failure 800 'operation not permitted'`（2026-05-27 新发现）
+
+**症状**：72 GPU NCCL collective 启动时所有 rank 报：
+```
+NCCL WARN MNNVL (cliqueSize 72) is available but not working on this system.
+Check the IMEX channel configuration (/dev/nvidia-caps-imex-channels).
+NCCL WARN Cuda failure 800 'operation not permitted'
+```
+单节点 4 GPU 没问题，跨节点必挂。
+
+**根因**：IMEX 控制面（`nvidia-imex-ctl -N` 连通矩阵全 `C`）OK，但 **数据面设备文件 `/dev/nvidia-caps-imex-channels/channel0` 在大部分节点上没创建**。Kernel 已注册 major（`/proc/devices` 有 `nvidia-caps-imex-channels`），但 dev node 没自动建。pega 上是 fabric bring-up 期间手工 mknod 出来的，其他 17 节点漏了。
+
+**修复**：`bash scripts/fix_imex_channels.sh` —— `mknod c $major 0` 在每个缺失节点上补建。SOP 把此操作标为 destructive，但本质只是补 dev node，幂等可逆（`rm` 即回）。
+
+**预防**：把这个步骤纳入新节点 onboarding。`scripts/setup.sh` 第一步就调用它。
+
+---
+
+## ⑫ OpenMPI + UCX 默认走 IB 导致 mpirun 启动失败（2026-05-27 新发现）
+
+**症状**：`mpirun -np 72 ...` 在 rank exchange 阶段报：
+```
+[host:pid] ib_device.c:1385 UCX ERROR ibv_create_ah(...) Connection timed out
+[host:pid] pml_ucx.c:429 Error: ucp_ep_create(proc=N) failed: Address not valid
+67 more processes have sent help message ... mpi_init:startup:internal-failure
+```
+NCCL 还没机会执行就被 MPI 自己干掉了。
+
+**根因**：NVIDIA HPC-X 风格的 OpenMPI 默认 PML = UCX；UCX 优先用 IB 传输（`mlx5_4`）。NVL72 上 IB 卡存在但子网管理器（SM）没配，UCX 无法建链路。
+
+**修复**：`scripts/env.sh` 已把 `UCX_TLS=tcp,self,sm` `UCX_NET_DEVICES=enP5p9s0` 固定。如果你绕过 env.sh 直接调 `mpirun`，必须显式 pass：
+```bash
+mpirun ... -x UCX_TLS=tcp,self,sm -x UCX_NET_DEVICES=enP5p9s0 ...
+```
+
+**注意**：这只影响 MPI 内部控制面（慢就慢，无所谓）。NCCL 数据面独立选 transport，72 GPU collective 仍然走 NVLink/MNNVL，带宽不受影响。详见 [nccl_design.md](nccl_design.md)。
+
+---
+
+## ⑬ nvbandwidth 二进制硬编码找 `B300_specs.json`
+
+**症状**：nvbandwidth 输出末尾的 JSON Writer 段说 `Spec: B300_specs.json, Status: Spec File Not Found (B300_specs.json)`。
+
+**根因**：我们 Testbench fork 的 nvbandwidth 在源码里写死了 `B300_specs.json` 而不是 `GB300_specs.json` —— 两个是不同 GPU（B300 = Blackwell HGX 独立卡，GB300 = Grace-Blackwell superchip），**不应该 symlink 混用**。
+
+**影响**：纯装饰性。Harness（`run_parallel_test.sh`）层会用 `nvidia-smi --query-gpu=name` 自检测出 `GB300` 然后读 `GB300_specs.json` 做阈值判定，pass/fail 仍然准确。
+
+**待办**：下次 build nvbandwidth 时在 `nvbandwidth_tests/json/SpecValidator.cpp`（或对应位置）加 `GB300` 的 case。当前 build cycle 不动。
+
+---
+
+## ⑭ 18 节点 hostname 全是 `pega`
+
+**症状**：跨节点 NCCL/MPI 日志全部以 `pega:` 开头，分不清是哪个节点。
+
+**根因**：18 节点用同一个 OS image，部署时没做 per-node hostname customization。
+
+**实操**：靠 IP（`192.168.15.137`–`154`）和 `cat /sys/class/dmi/id/product_serial` 区分。脚本里别 grep hostname 做节点判定。这件事**不修**——改 18 节点 hostname 影响 IMEX/NCCL/客户配置，得有完整 plan。
