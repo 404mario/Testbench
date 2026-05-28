@@ -14,11 +14,12 @@ using json = nlohmann::ordered_json;
 // --- 新增：根据设备名称动态生成 Spec 文件名 ---
 std::string detect_stream_spec_filename(std::string device_name) {
     // 1. 定义已知的高频型号列表 (与 gemm 和 nvbandwidth 保持一致)
+    // 顺序按特异性从高到低：substring match，"NVIDIA GB300" 会被 "B300" 提前命中。
     std::vector<std::string> known_models = {
-        "B200", "B300", "GB200", "GB300", 
-        "H100", "H200", "H20", "H800", 
-        "A100", "A800", 
-        "5090", "4090", "3090", 
+        "GB300", "GB200", "B300", "B200",
+        "H800", "H200", "H100", "H20",
+        "A800", "A100",
+        "5090", "4090", "3090",
         "L40", "T4", "V100"
     };
 

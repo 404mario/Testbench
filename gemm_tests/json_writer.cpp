@@ -15,10 +15,12 @@ using json = nlohmann::ordered_json;
 // === 新增辅助函数：根据设备名称动态生成 Spec 文件名 ===
 std::string detect_spec_filename(std::string device_name) {
     // 1. 定义已知的高频型号列表 (可以按需补充)
-    // 注意：顺序很重要，如果名字里同时包含多个关键词，前面的优先
+    // 注意：顺序很重要，substring match，更具体的型号必须在更通用的之前。
+    // 例如 "NVIDIA GB300" 会被 "B300" 提前命中，所以 "GB300" 必须排在 "B300" 前面。
+    // 同理 GB200/B200, H800/H200/H100/H20, A800/A100。
     std::vector<std::string> known_models = {
-        "B200", "B300", "GB200", "GB300", "H100", "H200", "H20", "H800", "A100", "A800", "5090",
-        "4090", "3090", "L40", "T4", "V100"
+        "GB300", "GB200", "B300", "B200", "H800", "H200", "H100", "H20",
+        "A800", "A100", "5090", "4090", "3090", "L40", "T4", "V100"
     };
 
     for (const auto& model : known_models) {
